@@ -14,18 +14,25 @@ Rollback at any moment = remove the Worker route.
 
 ## Step 0 — Secrets hygiene (do this before anything public)
 
-`.env.example` currently holds the real Supabase keys and is tracked by git.
+**Status (verified 2026-09-03): this repository is clean.** `.env.example` holds
+only empty placeholders in every commit it has ever appeared in, and a scan of
+all blobs across all refs for JWT-shaped strings, `sk_live`/`sk_test`, Resend
+keys and private-key headers found nothing. An earlier revision of this runbook
+warned that real Supabase keys were tracked in git — that described a local
+working copy that was never pushed. **No key rotation is required on account of
+this repo's history.**
 
-1. Copy it to `.env.local` (gitignored) for local dev:
+Keep it that way:
+
+1. Copy the example to `.env.local` (gitignored) for local dev:
    ```powershell
    Copy-Item .env.example .env.local
    ```
-2. Restore `.env.example` to empty placeholder values before any push.
-3. If this repo was already pushed to any remote with the keys in it:
-   Supabase Dashboard → Project Settings → API → **rotate the service_role key**
-   (and update it everywhere it's used).
-4. The service-role key must exist ONLY in: `.env.local` (your machine) and
+2. Put real values only in `.env.local` — never in `.env.example`.
+3. The service-role key must exist ONLY in: `.env.local` (your machine) and
    Vercel env vars (server-side). Never in client-side code or tracked files.
+4. If a real key ever does land in a commit, rotate it in
+   Supabase Dashboard → Project Settings → API before doing anything else.
 
 ## Step 1 — Supabase: apply schema
 
@@ -36,11 +43,24 @@ means the env vars aren't set in Vercel yet; once set, the schema must exist):
 npm i -g supabase
 supabase login
 supabase link --project-ref swsgsukibzfdqxvintre
-supabase db push                 # applies supabase/migrations/0001 + 0002
+supabase db push                 # applies ALL of supabase/migrations/0001 → 0005
 psql "$DATABASE_URL" -f supabase/seed.sql   # baseline categories + jurisdiction rules
 ```
-(Or paste each migration into the Supabase SQL Editor in order: 0001_init.sql,
-0002_rls_policies.sql, seed.sql.)
+(Or paste each migration into the Supabase SQL Editor **in order**:
+`0001_init.sql`, `0002_rls_policies.sql`, `0003_auth_and_settlement.sql`,
+`0004_search.sql`, `0005_rls_helper_recursion_fix.sql`, then `seed.sql`.)
+
+**All five are required. Two of them are easy to miss and were omitted from
+earlier versions of this runbook:**
+
+| Migration | Skipping it causes |
+|---|---|
+| `0003_auth_and_settlement.sql` | No profiles trigger, no settlement ledger RPC, no checkout idempotency key. The app self-heals profiles, but settlement and dedupe break. |
+| `0004_search.sql` | `search_products` RPC missing → search silently falls back to an unranked ILIKE scan. Degrades quietly; easy to miss. |
+| `0005_rls_helper_recursion_fix.sql` | **Hard failure.** RLS helper recursion raises Postgres `54001 stack depth limit exceeded` and **every anonymous catalog query 404s**. Not optional, and it does not degrade gracefully. |
+
+After applying, sanity-check 0005 from an anonymous (anon-key) client: a live
+product page must return 200, not 404.
 
 Create storage buckets: `product-images`, `brand-assets` (public);
 `coas`, `vendor-documents`, `dispute-evidence`, `shipping-evidence` (private).
@@ -60,7 +80,9 @@ Vercel Dashboard → bhfnm-marketplace project → Settings → Environment Vari
 
 Then **Redeploy** (Deployments → ⋯ → Redeploy) so the env takes effect.
 Verify: `https://bhfnm-marketplace.vercel.app/marketplace/api/health` should
-report `"database":"supabase"` (not `seed-fallback`).
+report `"database":"configured"` (not `"seed-fallback"`). It also reports
+`"payments"` as `"configured"` or `"disabled"` — `"disabled"` is correct until
+BTCPay is stood up.
 
 ## Step 3 — Cloudflare Worker: route /marketplace* to Vercel
 
