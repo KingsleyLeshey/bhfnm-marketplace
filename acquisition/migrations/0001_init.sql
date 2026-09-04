@@ -149,19 +149,22 @@ create index prospect_scores_rank_idx on prospect_scores (score desc);
 -- Latest run per company. Everything downstream reads these, never the raw
 -- append-only tables, so history never has to be mutated.
 create view current_scores as
-select s.*
-from prospect_scores s
-join (
-  select company_id, max(created_at) as max_created
-  from prospect_scores group by company_id
-) latest
-  on latest.company_id = s.company_id and latest.max_created = s.created_at;
+select s.* from prospect_scores s
+where s.id = (
+  select id from prospect_scores
+  where company_id = s.company_id
+  order by created_at desc, id desc
+  limit 1
+);
 
+-- Keyed on the latest RUN, not on max(created_at): a run inserts many product
+-- rows and their timestamps can straddle a millisecond, so a max(created_at)
+-- join silently drops part of the run.
 create view current_products as
-select p.*
-from company_products p
-join (
-  select company_id, max(created_at) as max_created
-  from company_products group by company_id
-) latest
-  on latest.company_id = p.company_id and latest.max_created = p.created_at;
+select p.* from company_products p
+where p.run_id = (
+  select run_id from company_products
+  where company_id = p.company_id
+  order by created_at desc, id desc
+  limit 1
+);

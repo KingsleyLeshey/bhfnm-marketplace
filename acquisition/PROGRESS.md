@@ -98,14 +98,19 @@ is ready, and note the blocker here.
       links, capability signals, internal-link depth, blog detection *(29 tests)*
 - [x] `src/extract/contacts.ts` — role-address allowlist, never-contact list,
       junk-domain filter, provenance, own-domain preference *(21 tests)*
-- [x] **124 tests passing, typecheck clean**
+- [x] `src/db/queries.ts` — D1 data layer: domain-keyed idempotent company
+      upsert, provenance, crawl-job lifecycle with the politeness gate,
+      append-only facts/products/scores, current-value reads, funnel counts
+      *(36 tests)*
+- [x] `test/helpers/d1.ts` — fake D1 over `node:sqlite`, so tests run the REAL
+      migration against a real SQLite engine and exercise the schema itself
+- [x] Fixed a latent view bug: `current_products` / `current_scores` keyed on
+      `max(created_at)` silently dropped part of a run whose inserts straddled
+      a millisecond. Now keyed on the latest run id. Regression test included.
+- [x] **160 tests passing, typecheck clean**
 
 ### Next — in order
 
-- [ ] **T3. D1 data layer** (`src/db/queries.ts`)
-      Typed helpers: upsert company, open crawl job, record page, append facts /
-      products / scores, read current views. Tested against `wrangler d1 --local`
-      or a SQLite harness.
 - [ ] **T4. Crawl consumer** (`src/crawl/fetcher.ts` + wire `queue()`)
       robots fetch and cache → politeness gate → fetch home/sitemap/about/contact
       → store raw in R2 → write `crawl_pages`. Honour `next_eligible_at`
@@ -159,3 +164,4 @@ Gap + catalog data → content proposals. Drafts, never mass auto-publication.
 |---|---|---|
 | 2026-09-03 | initial | Scaffold, schema, robots, politeness, JSON-LD, normalization, scoring. 74 tests. |
 | 2026-09-04 | interactive | T1 html.ts + T2 contacts.ts (50 new tests, 124 total). Discovered and documented the egress-policy constraint; retargeted T11 at saved fixtures and added fixtures as a user blocker. |
+| 2026-09-04 | interactive | T3 db/queries.ts + SQLite-backed D1 test harness (36 tests, 160 total). Fixed the current_* view bug. Schedule moved to hourly. |
