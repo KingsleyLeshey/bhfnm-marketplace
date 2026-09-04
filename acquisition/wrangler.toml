@@ -1,0 +1,40 @@
+name = "bhfnm-acquisition"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# --- D1: acquisition tables only. Never the marketplace database. ---
+[[d1_databases]]
+binding = "DB"
+database_name = "bhfnm-acquisition"
+database_id = "PLACEHOLDER_RUN_wrangler_d1_create"
+migrations_dir = "migrations"
+
+# --- R2: raw fetched HTML, so extraction can be re-run without re-crawling. ---
+[[r2_buckets]]
+binding = "RAW"
+bucket_name = "bhfnm-acquisition-raw"
+
+# --- Queues: the async substrate the marketplace never had. ---
+[[queues.producers]]
+binding = "CRAWL_QUEUE"
+queue = "bhfnm-crawl"
+
+[[queues.consumers]]
+queue = "bhfnm-crawl"
+max_batch_size = 10
+max_batch_timeout = 30
+max_retries = 3
+dead_letter_queue = "bhfnm-crawl-dlq"
+
+# --- Workers AI: second-pass extraction only. Deterministic parsing runs first. ---
+[ai]
+binding = "AI"
+
+# --- Scheduled waves. Off-peak minutes, deliberately not :00. ---
+[triggers]
+crons = ["17 */6 * * *"]
+
+[vars]
+CRAWLER_USER_AGENT = "BHFNM-AcquisitionBot/0.1 (+https://buyhempflowernearme.com/marketplace/crawler)"
+AUTOPILOT = "false"

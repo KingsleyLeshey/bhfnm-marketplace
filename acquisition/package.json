@@ -1,0 +1,22 @@
+{
+  "name": "bhfnm-acquisition",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Autonomous marketplace supply-acquisition engine — Cloudflare Workers + D1 + R2 + Queues",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 migrations apply bhfnm-acquisition --local",
+    "db:remote": "wrangler d1 migrations apply bhfnm-acquisition --remote"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.8",
+    "wrangler": "^3.99.0"
+  }
+}
