@@ -5,7 +5,7 @@ next unchecked task, updates it, and commits. Keep it accurate and terse.
 
 Working dir: `acquisition/` in `KingsleyLeshey/bhfnm-marketplace`
 Branch: `claude/project-status-report-5m5ke1`
-Last updated: 2026-09-03
+Last updated: 2026-09-04
 
 ---
 
@@ -25,6 +25,35 @@ Last updated: 2026-09-03
 7. **`npx vitest run` and `npx tsc --noEmit` must both pass before committing.**
 8. Hard gates stay separate from the weighted score, always.
 
+## Environment constraint — READ THIS BEFORE PLANNING CRAWL WORK
+
+**This build environment cannot reach the public web.** Outbound HTTPS goes
+through a policy-enforcing egress proxy that denies general hosts:
+
+```
+$ curl -i https://example.com/
+curl: (56) CONNECT tunnel failed, response 403
+```
+
+Verified 2026-09-04 against `example.com` and three hemp sites — all 403 at the
+CONNECT stage, which is an organisation egress-policy denial, not the sites
+blocking us. `$HTTPS_PROXY/__agentproxy/status` shows the proxy healthy with no
+relay failures, so this is policy, not fault. **Do not retry, do not try to
+route around it, do not add proxy workarounds.**
+
+What this means for the build:
+
+- Crawl and extraction code can be written and unit tested here, but **cannot
+  be validated against live sites from this environment**.
+- **The accuracy harness (T11) must run against saved HTML fixtures committed
+  under `test/fixtures/`, not live fetches.** Design it that way from the
+  start; a live-fetch harness cannot run here at all.
+- Real-world validation happens either from committed fixtures, or after
+  deployment, where the Worker fetches from Cloudflare's network rather than
+  through this proxy.
+- Fixtures are therefore a **user blocker** (below): saved HTML pages are
+  needed before extraction accuracy can be measured.
+
 ## Blocked on the user — do not attempt these
 
 These need credentials or accounts only Kingsley can create. **Do not fake
@@ -39,6 +68,11 @@ is ready, and note the blocker here.
       week warmup is the long pole)
 - [ ] Read-only Supabase credentials for marketplace aggregates
 - [ ] US business entity + postal address (CAN-SPAM footer, seller trust)
+- [ ] **Saved HTML fixtures for the accuracy harness** — 15–20 real hemp
+      supplier pages saved from a browser (Ctrl+S, "web page, HTML only") and
+      dropped into `acquisition/test/fixtures/`, ideally a mix of Shopify,
+      WooCommerce and custom sites. Needed to measure extraction accuracy,
+      which is the Phase 2 gate. This environment cannot fetch them itself.
 
 ---
 
@@ -60,17 +94,14 @@ is ready, and note the blocker here.
 - [x] `src/score/prospect.ts` — weighted scoring, versioned weights, hard gates
       held separate, SEO opportunity proxy *(17 tests)*
 - [x] `src/index.ts` — Worker entry with fetch/queue/scheduled surfaces
-- [x] **74 tests passing, typecheck clean**
+- [x] `src/extract/html.ts` — meta/OG facts, email and phone harvesting, social
+      links, capability signals, internal-link depth, blog detection *(29 tests)*
+- [x] `src/extract/contacts.ts` — role-address allowlist, never-contact list,
+      junk-domain filter, provenance, own-domain preference *(21 tests)*
+- [x] **124 tests passing, typecheck clean**
 
 ### Next — in order
 
-- [ ] **T1. HTML fallback extractor** (`src/extract/html.ts`)
-      Meta/OpenGraph title and description, `mailto:` role-address harvesting
-      (`info@`, `sales@`, `wholesale@` — **never** named individuals), phone,
-      social links, "wholesale"/"private label" page detection. Pure + tested.
-- [ ] **T2. Contact classification** (`src/extract/contacts.ts`)
-      Split role vs personal addresses; personal ones are discarded, not stored.
-      Record source URL per contact for lawful-basis provenance.
 - [ ] **T3. D1 data layer** (`src/db/queries.ts`)
       Typed helpers: upsert company, open crawl job, record page, append facts /
       products / scores, read current views. Tested against `wrangler d1 --local`
@@ -97,8 +128,10 @@ is ready, and note the blocker here.
       Cloudflare Access. Ranked prospects, detail view, facts with provenance,
       gap list, funnel counters.
 - [ ] **T11. Accuracy harness** (`test/fixtures/`, `src/eval/`)
-      20 hand-labelled sites → precision/recall per field. **This is the Phase 2
-      gate.** Report the number in this file.
+      Runs over **saved HTML fixtures** (see the environment constraint above —
+      live fetching is impossible here). Hand-label expected fields per fixture,
+      report precision/recall per field. **This is the Phase 2 gate.** Record
+      the number in this file. Blocked until fixtures exist.
 
 ## Phase 2 — Outreach (do not start until T11 reports acceptable accuracy)
 
@@ -125,3 +158,4 @@ Gap + catalog data → content proposals. Drafts, never mass auto-publication.
 | Date | Session | Work |
 |---|---|---|
 | 2026-09-03 | initial | Scaffold, schema, robots, politeness, JSON-LD, normalization, scoring. 74 tests. |
+| 2026-09-04 | interactive | T1 html.ts + T2 contacts.ts (50 new tests, 124 total). Discovered and documented the egress-policy constraint; retargeted T11 at saved fixtures and added fixtures as a user blocker. |
