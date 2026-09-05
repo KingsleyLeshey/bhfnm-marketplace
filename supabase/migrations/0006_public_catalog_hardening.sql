@@ -1,17 +1,17 @@
 -- 0006_public_catalog_hardening.sql
 --
--- Keep the marketplace highly indexable while removing raw anonymous database
--- export paths. Public product/store/review/compliance content is still served
--- by Next.js as HTML + JSON-LD + sitemap. The app's server-side catalog reader
--- uses the service role and keeps explicit live/active/published filters.
+-- SEO-safe catalog hardening: public HTML, JSON-LD, sitemaps, images and search
+-- remain available through Next.js, while raw PostgREST table/RPC export paths
+-- are closed. The server-side catalog reader uses the service role and keeps
+-- explicit live/active/published/verified filters.
 
 begin;
 
--- ---------------------------------------------------------------------------
--- 1. Anonymous visitors must use the curated storefront surface, not PostgREST
---    table dumps. This does NOT affect Supabase Auth, public HTML, JSON-LD,
---    sitemaps, product images rendered by the app, or authenticated workflows.
--- ---------------------------------------------------------------------------
+-- Public and signed-in browsers use the curated application surface, not raw
+-- catalog tables. Revoking authenticated SELECT matters because otherwise a
+-- scraper could simply create an account and regain the machine-perfect dump.
+-- Supabase Auth itself is unaffected; protected application reads/writes are
+-- mediated by server route handlers using the service role.
 revoke select on table
   categories,
   vendors,
@@ -22,18 +22,20 @@ revoke select on table
   wholesale_price_tiers,
   compliance_records,
   reviews
-from anon;
+from anon, authenticated;
 
--- search_products is consumed by the server-side search layer. PostgreSQL
--- functions default to EXECUTE for PUBLIC, so remove that implicit anon path.
+-- Search is rendered through the server-side application layer. Remove the
+-- default PUBLIC execute grant so callers cannot enumerate product ids/ranks by
+-- hitting the Supabase RPC directly.
 revoke execute on function search_products(text, int) from public;
-grant execute on function search_products(text, int) to authenticated, service_role;
+revoke execute on function search_products(text, int) from anon, authenticated;
+grant execute on function search_products(text, int) to service_role;
 
--- ---------------------------------------------------------------------------
--- 2. Fix over-broad image RLS. If table grants are ever relaxed later, images
---    for draft/suspended/delisted listings must still stay private.
--- ---------------------------------------------------------------------------
+-- If table grants are ever relaxed later, images for non-live listings still
+-- remain invisible except to the owner/admin. Drops make this migration safe to
+-- re-run in the repository's current forward-apply deployment scripts.
 drop policy if exists images_read on product_images;
+drop policy if exists images_scoped_read on product_images;
 create policy images_scoped_read on product_images for select using (
   exists (
     select 1
@@ -47,11 +49,11 @@ create policy images_scoped_read on product_images for select using (
   )
 );
 
--- ---------------------------------------------------------------------------
--- 3. Wholesale tiers are not public catalog data. Only the owning vendor,
---    admins, or an explicitly approved wholesale buyer may read exact tiers.
--- ---------------------------------------------------------------------------
+-- Exact wholesale tiers are operational data, not public SEO data. Keep a
+-- defense-in-depth RLS rule for a future server/API path that deliberately
+-- operates with a user JWT instead of the service role.
 drop policy if exists tiers_read on wholesale_price_tiers;
+drop policy if exists tiers_authorized_read on wholesale_price_tiers;
 create policy tiers_authorized_read on wholesale_price_tiers for select using (
   is_admin()
   or exists (
