@@ -1,7 +1,9 @@
 "use client";
 
 // Product purchase actions — real API calls with visible loading/error/retry
-// states. Clearly handles: signed-out, out-of-stock, backend-unavailable.
+// states. The client receives only the minimum public variant projection:
+// id, label, public price, boolean availability and wholesale-only status.
+// Exact inventory counts and SKUs stay server-side.
 
 import { useState } from "react";
 import Link from "next/link";
@@ -9,7 +11,14 @@ import { useRouter } from "next/navigation";
 import { Bitcoin, Check, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui";
 import { formatPrice } from "@/lib/utils";
-import type { ProductVariant } from "@/lib/types";
+
+export interface PublicBuyVariant {
+  id: string;
+  name: string;
+  priceCents: number;
+  inStock: boolean;
+  wholesaleOnly: boolean;
+}
 
 export function BuyBox({
   vendorName,
@@ -20,7 +29,7 @@ export function BuyBox({
 }: {
   vendorName: string;
   vendorSlug: string;
-  variants: Pick<ProductVariant, "id" | "name" | "priceCents" | "stock" | "wholesaleOnly">[];
+  variants: PublicBuyVariant[];
   purchasable: boolean;
   unavailableReason?: string;
 }) {
@@ -87,7 +96,7 @@ export function BuyBox({
               role="radio"
               aria-checked={v.id === variantId}
               onClick={() => setVariantId(v.id)}
-              disabled={v.stock === 0}
+              disabled={!v.inStock}
               className={`rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-40 ${
                 v.id === variantId
                   ? "border-jade-500 bg-jade-500/10 text-jade-300"
@@ -95,15 +104,15 @@ export function BuyBox({
               }`}
             >
               {v.name} · {formatPrice(v.priceCents)}
-              {v.stock === 0 && " · out of stock"}
+              {!v.inStock && " · out of stock"}
             </button>
           ))}
         </div>
       )}
 
-      {selected && selected.stock === 0 ? (
+      {selected && !selected.inStock ? (
         <div className="rounded-lg border border-ink-600 bg-ink-800/60 px-4 py-3 text-sm text-mist-300">
-          Out of stock. Check back — inventory counts here are real, not decorative.
+          Out of stock. Check back — availability here is real, not decorative.
         </div>
       ) : (
         <div className="flex flex-col gap-3 sm:flex-row">
