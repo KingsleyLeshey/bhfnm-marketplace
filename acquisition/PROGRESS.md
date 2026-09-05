@@ -107,14 +107,16 @@ is ready, and note the blocker here.
 - [x] Fixed a latent view bug: `current_products` / `current_scores` keyed on
       `max(created_at)` silently dropped part of a run whose inserts straddled
       a millisecond. Now keyed on the latest run id. Regression test included.
-- [x] **160 tests passing, typecheck clean**
+- [x] `src/crawl/fetcher.ts` — the crawler: robots → politeness gate → fetch →
+      raw to R2. Per-path robots checks, duplicate-content skip, page cap,
+      Retry-After precedence, backoff. fetch and clock injected so it is fully
+      testable without network *(21 tests)*
+- [x] **181 tests passing, typecheck clean**
 
 ### Next — in order
 
-- [ ] **T4. Crawl consumer** (`src/crawl/fetcher.ts` + wire `queue()`)
-      robots fetch and cache → politeness gate → fetch home/sitemap/about/contact
-      → store raw in R2 → write `crawl_pages`. Honour `next_eligible_at`
-      absolutely. Identify with `CRAWLER_USER_AGENT`.
+- [ ] **T4b. Wire `queue()` in index.ts** to crawlCompany + the D1 writes
+      (fetcher.ts is done; only the consumer glue remains).
 - [ ] **T5. Extraction pipeline** (`src/extract/run.ts`)
       Deterministic pass over stored pages → `company_facts` + `company_products`
       under one `run_id`. Confidence = coverage of required fields.
@@ -164,4 +166,5 @@ Gap + catalog data → content proposals. Drafts, never mass auto-publication.
 |---|---|---|
 | 2026-09-03 | initial | Scaffold, schema, robots, politeness, JSON-LD, normalization, scoring. 74 tests. |
 | 2026-09-04 | interactive | T1 html.ts + T2 contacts.ts (50 new tests, 124 total). Discovered and documented the egress-policy constraint; retargeted T11 at saved fixtures and added fixtures as a user blocker. |
+| 2026-09-05 | interactive | T4 fetcher.ts crawler (21 tests, 181 total). Automation disabled: fired 5x with no repo attached, produced nothing. |
 | 2026-09-04 | interactive | T3 db/queries.ts + SQLite-backed D1 test harness (36 tests, 160 total). Fixed the current_* view bug. Schedule moved to hourly. |
